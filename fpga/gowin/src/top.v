@@ -28,7 +28,7 @@ module top (
     input  wire [11:0] adc_data,   // AD9226 AD0..AD11, pins 25..36
 
     output wire        adc_aclk,   // FPGA-generated ADC clock, pin 37
-    output wire        uart_tx     // UART to PC, pin 17
+    output wire        uart_tx,     // UART to PC, pin 17
     output wire        uart_tx_esp32 // UART to ESP32, pin 38
 
 );
