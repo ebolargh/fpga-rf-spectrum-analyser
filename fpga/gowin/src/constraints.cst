@@ -4,6 +4,9 @@ IO_PORT "clk" IO_TYPE=LVCMOS33;
 IO_LOC "uart_tx" 17;
 IO_PORT "uart_tx" IO_TYPE=LVCMOS33;
 
+IO_LOC "uart_tx_esp32" 38;
+IO_PORT "uart_tx_esp32" IO_TYPE=LVCMOS33;
+
 IO_LOC "adc_aclk" 37;
 IO_PORT "adc_aclk" IO_TYPE=LVCMOS33;
 

@@ -29,6 +29,8 @@ module top (
 
     output wire        adc_aclk,   // FPGA-generated ADC clock, pin 37
     output wire        uart_tx     // UART to PC, pin 17
+    output wire        uart_tx_esp32 // UART to ESP32, pin 38
+
 );
 
     // =========================================================
@@ -51,6 +53,8 @@ module top (
         .adc_aclk   (adc_aclk),
         .adc_sample_tick (adc_sample_tick)
     );
+
+    assign uart_tx_esp32 = uart_tx; // Mirror the FPGA UART output for the ESP32.
 
 
     // =========================================================
