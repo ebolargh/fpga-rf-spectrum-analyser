@@ -1,0 +1,49 @@
+IO_LOC "clk" 52;
+IO_PORT "clk" IO_TYPE=LVCMOS33;
+
+IO_LOC "uart_tx" 17;
+IO_PORT "uart_tx" IO_TYPE=LVCMOS33;
+
+IO_LOC "adc_aclk" 37;
+IO_PORT "adc_aclk" IO_TYPE=LVCMOS33;
+
+// =========================================================
+// ADC DATA INPUT PINS
+// Pins are reversed due to ADC module layout
+// =========================================================
+
+IO_LOC "adc_data[11]" 25;
+IO_PORT "adc_data[11]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+
+IO_LOC "adc_data[10]" 26;
+IO_PORT "adc_data[10]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+
+IO_LOC "adc_data[9]" 27;
+IO_PORT "adc_data[9]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+
+IO_LOC "adc_data[8]" 28;
+IO_PORT "adc_data[8]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+
+IO_LOC "adc_data[7]" 29;
+IO_PORT "adc_data[7]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+
+IO_LOC "adc_data[6]" 30;
+IO_PORT "adc_data[6]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+
+IO_LOC "adc_data[5]" 31;
+IO_PORT "adc_data[5]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+
+IO_LOC "adc_data[4]" 32;
+IO_PORT "adc_data[4]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+
+IO_LOC "adc_data[3]" 33;
+IO_PORT "adc_data[3]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+
+IO_LOC "adc_data[2]" 34;
+IO_PORT "adc_data[2]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+
+IO_LOC "adc_data[1]" 35;
+IO_PORT "adc_data[1]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
+
+IO_LOC "adc_data[0]" 36;
+IO_PORT "adc_data[0]" IO_TYPE=LVCMOS33 PULL_MODE=DOWN;
