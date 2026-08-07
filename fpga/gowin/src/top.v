@@ -42,7 +42,6 @@ module top (
     //   ADC clock = FPGA_CLK_HZ / (2 * ADC_HALF_PERIOD_COUNT)
     // =========================================================
 
-    wire adc_aclk;          //  actual clk signal sent to adc
     wire adc_sample_tick;   //  1 clk cycle pulse. says adc sample should now be captured
 
     adc_clk_gen #(
