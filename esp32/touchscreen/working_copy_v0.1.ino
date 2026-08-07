@@ -6,6 +6,14 @@
 TFT_eSPI tft = TFT_eSPI();
 Preferences preferences;
 
+// Tang Nano 9K FFT UART: FPGA pin 38 -> ESP32 GPIO 34.
+constexpr int FPGA_UART_RX_PIN = 34;
+constexpr uint32_t FPGA_UART_BAUD = 115200;
+constexpr int FFT_BIN_COUNT = 256;
+constexpr int DISPLAY_BIN_COUNT = FFT_BIN_COUNT / 2;
+
+HardwareSerial fpgaSerial(2);
+
 // Set true once to force touch recalibration.
 // Change it back to false after uploading.
 constexpr bool FORCE_TOUCH_CALIBRATION = false;
@@ -55,6 +63,19 @@ constexpr int WATERFALL_H = PLOT_H - TRACE_H - 3;
 unsigned long previousSpectrumUpdate = 0;
 
 uint8_t spectrumLevels[WATERFALL_W];
+uint16_t fftBins[FFT_BIN_COUNT];
+
+enum FpgaRxState {
+  FPGA_WAIT_AA,
+  FPGA_WAIT_55,
+  FPGA_READ_PAYLOAD
+};
+
+FpgaRxState fpgaRxState = FPGA_WAIT_AA;
+uint16_t fpgaPayloadByte = 0;
+uint8_t fpgaHighByte = 0;
+bool spectrumFrameReady = false;
+unsigned long lastFpgaFrameTime = 0;
 
 TFT_eSprite waterfallSprite = TFT_eSprite(&tft);
 bool waterfallReady = false;
@@ -298,58 +319,135 @@ void drawSpectrumButtons() {
 }
 
 // ------------------------------------------------------------
-// Fake spectrum generation
+// FPGA UART receiver and FFT-bin scaling
 // ------------------------------------------------------------
 
-void generateFakeSpectrum() {
-  float movement = millis() / 500.0f;
+void convertFftBinsToDisplay() {
+  float logBins[DISPLAY_BIN_COUNT];
+  float minimumLevel = 1000.0f;
+  float maximumLevel = 0.0f;
+
+  // Ignore the DC bin when calculating the automatic display range.
+  logBins[0] = 0.0f;
+
+  for (int bin = 1; bin < DISPLAY_BIN_COUNT; bin++) {
+    float level = log10f(static_cast<float>(fftBins[bin]) + 1.0f);
+    logBins[bin] = level;
+    minimumLevel = min(minimumLevel, level);
+    maximumLevel = max(maximumLevel, level);
+  }
+
+  float displayRange = maximumLevel - minimumLevel;
+
+  if (displayRange < 0.05f) {
+    displayRange = 0.05f;
+  }
 
   for (int x = 0; x < WATERFALL_W; x++) {
-    float noise = random(4, 18);
+    float binPosition =
+      static_cast<float>(x) *
+      static_cast<float>(DISPLAY_BIN_COUNT - 1) /
+      static_cast<float>(WATERFALL_W - 1);
 
-    float peak1Position =
-      120.0f + sinf(movement) * 5.0f;
+    int lowerBin = static_cast<int>(binPosition);
+    int upperBin = min(lowerBin + 1, DISPLAY_BIN_COUNT - 1);
+    float fraction = binPosition - static_cast<float>(lowerBin);
 
-    float peak2Position = 300.0f;
-    float peak3Position = 390.0f;
+    float interpolatedLevel =
+      logBins[lowerBin] +
+      (logBins[upperBin] - logBins[lowerBin]) * fraction;
 
-    float peak1 =
-      100.0f *
-      expf(
-        -0.5f *
-        powf(
-          (x - peak1Position) / 9.0f,
-          2
-        )
+    int newLevel;
+
+    if (lowerBin == 0) {
+      newLevel = 0;
+    } else {
+      newLevel = constrain(
+        static_cast<int>(
+          255.0f *
+          (interpolatedLevel - minimumLevel) /
+          displayRange
+        ),
+        0,
+        255
       );
+    }
 
-    float peak2 =
-      155.0f *
-      expf(
-        -0.5f *
-        powf(
-          (x - peak2Position) / 5.0f,
-          2
-        )
-      );
+    if (averagingEnabled) {
+      spectrumLevels[x] =
+        static_cast<uint8_t>(
+          (
+            static_cast<uint16_t>(spectrumLevels[x]) * 3U +
+            static_cast<uint16_t>(newLevel)
+          ) / 4U
+        );
+    } else {
+      spectrumLevels[x] = static_cast<uint8_t>(newLevel);
+    }
+  }
 
-    float peak3 =
-      75.0f *
-      expf(
-        -0.5f *
-        powf(
-          (x - peak3Position) / 14.0f,
-          2
-        )
-      );
+  if (peakHoldEnabled || markerEnabled) {
+    int strongestX = 1;
 
-    int level =
-      static_cast<int>(
-        noise + peak1 + peak2 + peak3
-      );
+    for (int x = 2; x < WATERFALL_W; x++) {
+      if (spectrumLevels[x] > spectrumLevels[strongestX]) {
+        strongestX = x;
+      }
+    }
 
-    spectrumLevels[x] =
-      constrain(level, 0, 255);
+    markerX = strongestX;
+  }
+}
+
+void completeFpgaFrame() {
+  convertFftBinsToDisplay();
+  spectrumFrameReady = true;
+  lastFpgaFrameTime = millis();
+}
+
+void processFpgaByte(uint8_t value) {
+  switch (fpgaRxState) {
+    case FPGA_WAIT_AA:
+      if (value == 0xAA) {
+        fpgaRxState = FPGA_WAIT_55;
+      }
+      break;
+
+    case FPGA_WAIT_55:
+      if (value == 0x55) {
+        fpgaPayloadByte = 0;
+        fpgaRxState = FPGA_READ_PAYLOAD;
+      } else if (value != 0xAA) {
+        fpgaRxState = FPGA_WAIT_AA;
+      }
+      break;
+
+    case FPGA_READ_PAYLOAD:
+      if ((fpgaPayloadByte & 1U) == 0U) {
+        fpgaHighByte = value;
+      } else {
+        uint16_t binIndex = fpgaPayloadByte >> 1;
+
+        fftBins[binIndex] =
+          (static_cast<uint16_t>(fpgaHighByte) << 8) |
+          static_cast<uint16_t>(value);
+      }
+
+      fpgaPayloadByte++;
+
+      if (fpgaPayloadByte >= FFT_BIN_COUNT * 2U) {
+        fpgaRxState = FPGA_WAIT_AA;
+        completeFpgaFrame();
+      }
+      break;
+  }
+}
+
+void readFpgaSerial() {
+  while (fpgaSerial.available() > 0) {
+    processFpgaByte(
+      static_cast<uint8_t>(fpgaSerial.read())
+    );
   }
 }
 
@@ -521,8 +619,6 @@ void addWaterfallLine() {
 }
 
 void updateSpectrumDisplay() {
-  generateFakeSpectrum();
-
   if (waterfallEnabled && waterfallReady) {
     drawTrace(TRACE_H);
 
@@ -1075,6 +1171,14 @@ void drawCurrentPage() {
 void setup() {
   Serial.begin(115200);
 
+  fpgaSerial.setRxBufferSize(1024);
+  fpgaSerial.begin(
+    FPGA_UART_BAUD,
+    SERIAL_8N1,
+    FPGA_UART_RX_PIN,
+    -1
+  );
+
   tft.init();
   tft.setRotation(1);
   tft.fillScreen(TFT_BLACK);
@@ -1104,12 +1208,12 @@ void setup() {
     waterfallEnabled = false;
   }
 
-  randomSeed(micros());
-
   drawCurrentPage();
 }
 
 void loop() {
+  readFpgaSerial();
+
   uint16_t touchX = 0;
   uint16_t touchY = 0;
 
@@ -1126,9 +1230,11 @@ void loop() {
   if (
     currentPage == PAGE_SPECTRUM &&
     scanning &&
-    millis() - previousSpectrumUpdate >= 150
+    spectrumFrameReady &&
+    millis() - previousSpectrumUpdate >= 40
   ) {
     previousSpectrumUpdate = millis();
+    spectrumFrameReady = false;
     updateSpectrumDisplay();
   }
 
