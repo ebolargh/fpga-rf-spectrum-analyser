@@ -1,0 +1,33 @@
+# FPGA build outputs
+impl/
+*.fs
+*.bin
+*.bit
+*.tmp
+*.log
+*.bak
+*.jou
+*.rpt
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Arduino / embedded build outputs
+build/
+.pio/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.key
+*.pem
+secrets.*
+credentials.*
