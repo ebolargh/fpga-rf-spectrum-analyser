@@ -46,7 +46,7 @@ module top (
 
     adc_clk_gen #(
         .FPGA_CLK_HZ(27_000_000),
-        .ADC_SAMPLE_HZ(2_000_000)   // Change to modify ADC clk speed
+        .ADC_SAMPLE_HZ(27_000_000)  // Direct 27 MSPS mode for 10 MHz LPF
     ) adc_clk_gen_inst (
         .clk        (clk),
         .adc_aclk   (adc_aclk),
